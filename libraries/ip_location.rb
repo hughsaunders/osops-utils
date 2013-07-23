@@ -303,40 +303,74 @@ module RCB
 
 
 
-  # Get a node hash from another node by recipe or role.
-  # If there are recipe and role results for a string, the first node from
-  # the preferred query is returned.
-  # Roles are preferred by default but this can be specified with the 'prefer'
-  # parameter.
-  def get_settings(recipe_or_role, prefer=:role)
+  # Get a node hash by recipe or role.
+  def osops_search(search_string,  # recipe or role name
+                   one_or_all=:one,# return first node found or a list of nodes?
+                                   #   if set to :all a list will be returned
+                                   #   even if only one node is found.
+                   include_me=true,# include self in results
+                   prefer=:role,   # if only one item is to be returned and
+                                   #   there are results from both the role
+                                   #   search and the recipe search, pick the
+                                   #   first item from the list specified here.%
+                                   #   must be :recipe or :role
+                   safe_deref=nil  # if nil, return node, else return
+                                   #   rcb_safe_deref(node,safe_deref)
+                  )
     types = [:recipe, :role]
     if not types.member? prefer
       raise "osops-utils get_settings parameter 'prefer' must be in #{types}"
     end
+    if not [:one, :all].member? one_or_all
+      raise "osops-utils get_settings parameter 'one_or_all' must be :one or :all"
+    end
 
     # get the non-prefered query type
-    other = (types-[prefer.to_sym])[0]
+    other = (types-[prefer.to_sym]).first
 
     # Query in this order.
     order = [prefer, other]
 
-    for type in order
-      if node[type].include? recipe_or_role
-        debug("i contain #{type} #{recipe_or_role}, so choosing my settings")
-        node[settings] # return
-      else
-        recipe_or_role.gsub!(/::/, "\\:\\:")
-        query = "#{type}s:#{recipe_or_role} and chef_environment:#{node.chef_environment}"
-        result, _, _ = Chef::Search::Quey.new.search(:node, query)
-        if not result.empty?
-          debug("returning first result found: #{result.first.name}")
-          result.first[settings] # return
-        else
-        Chef::Log.warn("Can't find node with #{type} #{recipe_or_role}")
-        nil # return
+    results={
+      :recipe => [],
+      :role => []
+    }
+
+    for query_type in order
+      if include_me and node["#{query_type}s"].include? search_string
+        Chef::Log::info("I contain #{query_type} #{search_string}, so adding myself to results")
+        results[query_type] << node
+        break if one_or_all == :one # skip expensive searches if unnecessary
       end
+
+      search_string.gsub!(/::/, "\\:\\:")
+      query = "#{query_type}s:#{search_string} AND chef_environment:#{node.chef_environment}"
+      Chef::Log::info("Query: #{query}")
+      result, _, _ = Chef::Search::Query.new.search(:node, query)
+      results[query_type].push(*result)
+      break if one_or_all == :one and results.values.map(&:length).reduce(:+).nonzero?
+    end #end for
+
+    return_list = results[prefer] + results[other]
+    if return_list.any?
+      # we have at least one result
+      if not safe_deref.nil?
+        # result should be dereferenced, do that then remove nils.
+        Chef::Log::info("applying deref #{safe_deref}")
+        return_list.map! {|nodeish| rcb_safe_deref(nodeish, safe_deref)}
+        return_list.delete_if{|item| item.nil?}
+      end
+      if one_or_all == :one 
+        #return first item
+        return_list.first
+      else 
+        #return list (even if it only contains one item)
+        return_list
+      end
+    else
+      Chef::Log::info("No results found for query #{search_string}")
     end
-  end
+  end #end function
 
 
   # Get a specific node hash from another node by recipe
