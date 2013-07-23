@@ -360,7 +360,7 @@ module RCB
         return_list.map! {|nodeish| rcb_safe_deref(nodeish, safe_deref)}
         return_list.delete_if{|item| item.nil?}
       end
-      if one_or_all == :one 
+      if one_or_all == :one
         #return first item
         return_list.first
       else 
@@ -466,7 +466,7 @@ module RCB
     result
   end
 
-end
+end #end module
 
 class Chef::Recipe
   include RCB
