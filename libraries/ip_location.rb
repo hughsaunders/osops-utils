@@ -301,6 +301,44 @@ module RCB
     result.length
   end
 
+
+
+  # Get a node hash from another node by recipe or role.
+  # If there are recipe and role results for a string, the first node from
+  # the preferred query is returned.
+  # Roles are preferred by default but this can be specified with the 'prefer'
+  # parameter.
+  def get_settings(recipe_or_role, prefer=:role)
+    types = [:recipe, :role]
+    if not types.member? prefer
+      raise "osops-utils get_settings parameter 'prefer' must be in #{types}"
+    end
+
+    # get the non-prefered query type
+    other = (types-[prefer.to_sym])[0]
+
+    # Query in this order.
+    order = [prefer, other]
+
+    for type in order
+      if node[type].include? recipe_or_role
+        debug("i contain #{type} #{recipe_or_role}, so choosing my settings")
+        node[settings] # return
+      else
+        recipe_or_role.gsub!(/::/, "\\:\\:")
+        query = "#{type}s:#{recipe_or_role} and chef_environment:#{node.chef_environment}"
+        result, _, _ = Chef::Search::Quey.new.search(:node, query)
+        if not result.empty?
+          debug("returning first result found: #{result.first.name}")
+          result.first[settings] # return
+        else
+        Chef::Log.warn("Can't find node with #{type} #{recipe_or_role}")
+        nil # return
+      end
+    end
+  end
+
+
   # Get a specific node hash from another node by recipe
   #
   # In the event of a search with multiple results,
