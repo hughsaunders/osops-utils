@@ -182,19 +182,12 @@ module RCB
   #
 
   def get_access_endpoint(role, server, service)
-    query = "roles:#{role} AND chef_environment:#{node.chef_environment}"
-    debug("searching :node index for '#{query}'")
-    result, _, _ = Chef::Search::Query.new.search(:node, query)
     path = "#{role}/#{server}/#{service}"
-
-    # if current node is a role-holder, but it's not in the results, add it.
-    if node["roles"].include?(role)
-      if not result.any?{ |r| r.name == node.name}
-        debug("i hold role '#{role}', but i wasn't found in search!")
-        debug("(adding myself to the results)")
-        result << node
-      end
-    end
+    result = osops_search(search_string=role,
+                          one_or_all=:all,
+                          include_me=true,
+                          prefer=:role,
+                          safe_deref=nil)
 
     if result.length == 0
       Chef::Log.warn("Cannot find #{server}/#{service} for role #{role}")
