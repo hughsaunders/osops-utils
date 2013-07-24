@@ -234,30 +234,11 @@ module RCB
   # If includeme=false, the current node hash is removed from the results
   # before the results are evaluated and returned
   def get_settings_by_role(role, settings, includeme = true)
-    if includeme
-      if node["roles"].include?(role)
-        debug("`includeme' is true so choosing myself since I hold the role")
-        return node[settings]
-      end
-    end
-
-    query = "roles:#{role} AND chef_environment:#{node.chef_environment}"
-    debug("searching :node index for '#{query}'")
-    result, _, _ = Chef::Search::Query.new.search(:node, query)
-
-    if not includeme
-      # remove the calling node from the result array
-      debug("`includeme' is false so ensuring I'm removed from results")
-      result.delete_if { |v| v.name == node.name }
-    end
-
-    if result.length == 0
-      debug("no usable nodes found!")
-      nil
-    else
-      debug("returning first result found: #{result[0].name}")
-      result[0][settings]
-    end
+    osops_search(search_string=role,
+                          one_or_all=:one,
+                          include_me=includeme,
+                          prefer=:role,
+                          safe_deref=settings)
   end
 
   # search for a role and return how many there are in the environment.
