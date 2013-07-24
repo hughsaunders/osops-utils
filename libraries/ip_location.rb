@@ -347,8 +347,15 @@ module RCB
       break if one_or_all == :one and results.values.map(&:length).reduce(:+).nonzero?
     end #end for
 
+    #combine results into prioritised list
     return_list = results[prefer] + results[other]
+
+    #remove duplicates
     return_list.uniq!
+
+    #remove self if returned by search but include_me is false
+    return_list.delete! node if not include_me
+
     Chef::Log::info("ospos_search return_list: #{return_list}")
     if return_list.any?
       # we have at least one result
