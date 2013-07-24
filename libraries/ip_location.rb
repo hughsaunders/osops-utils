@@ -252,7 +252,7 @@ module RCB
   #
   def get_settings_by_recipe(recipe, settings)
     osops_search(search_string=recipe,
-                 one_or_all=:all,
+                 one_or_all=:one,
                  include_me=true,
                  order=[:recipe],
                  safe_deref=settings)
@@ -316,7 +316,7 @@ module RCB
     return_list = order.map {|search_type| results[search_type]}.reduce(:+)
 
     #remove duplicates
-    return_list.uniq! {|e| e.name}
+    return_list.uniq!(&:name)
 
     #remove self if returned by search but include_me is false
     return_list.delete_if {|e| e.name == node.name }  if not include_me
