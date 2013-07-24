@@ -186,7 +186,7 @@ module RCB
     result = osops_search(search_string=role,
                           one_or_all=:all,
                           include_me=true,
-                          prefer=:role,
+                          order=[:role, :recipe],
                           safe_deref=nil)
 
     Chef::Log.warn("osops_search result: #{result}")
@@ -212,7 +212,7 @@ module RCB
     result = osops_search(search_string=role,
                           one_or_all=:all,
                           include_me=true,
-                          prefer=:role,
+                          order=[:role, :recipe],
                           safe_deref=nil)
 
 
@@ -237,8 +237,25 @@ module RCB
     osops_search(search_string=role,
                           one_or_all=:one,
                           include_me=includeme,
-                          prefer=:role,
+                          order=[:role],
                           safe_deref=settings)
+  end
+
+  # Get a specific node hash from another node by recipe
+  #
+  # In the event of a search with multiple results,
+  # it returns the first match
+  #
+  # In the event of a search with a no matches, if the role
+  # is held on the running node, then the current node hash
+  # values will be returned
+  #
+  def get_settings_by_recipe(recipe, settings)
+    osops_search(search_string=recipe,
+                 one_or_all=:all,
+                 include_me=true,
+                 order=[:recipe],
+                 safe_deref=settings)
   end
 
   # search for a role and return how many there are in the environment.
@@ -246,45 +263,33 @@ module RCB
   # If includeme=false, the current node is removed from the  search result
   # before the results are evaluated and returned
   def get_role_count(role, includeme = true)
-
-    query = "roles:#{role} AND chef_environment:#{node.chef_environment}"
-    debug("searching :node index for '#{query}'")
-    result = Chef::Search::Query.new.search(:node, query)[0]
-
-    if not includeme
-      # remove the calling node from the result array
-      debug("`includeme' is false so ensuring I'm removed from results")
-      result.delete_if { |v| v.name == node.name }
-    else
-      # if result doesn't contain current node, but role is in current runlist,
-      # add it to result
-      if not result.map(&:name).include?(node.name)
-        if node["roles"].include?(role)
-          debug("i wasn't found in search, but '#{role}' role is in " +
-                "my run_list! Adding myself to the results.")
-          result << node
-        end
-      end
-    end
-
-    debug("returning count '#{result.length}' (#{result.map(&:name)})")
-    result.length
+    osops_search(search_string=role,
+                 one_or_all=:all,
+                 include_me=includeme,
+                 order=[:role],
+                 safe_deref=nil).length
   end
 
+  def get_nodes_by_recipe(recipe, includeme = true)
+    osops_search(search_string=recipe,
+                 one_or_all=:all,
+                 include_me=includeme,
+                 order=[:recipe],
+                 safe_deref=nil)
+  end
 
-
-  # Get a node hash by recipe or role.
+  # Get node hash(es) by recipe or role.
   def osops_search(search_string,  # recipe or role name
                    one_or_all=:one,# return first node found or a list of nodes?
                                    #   if set to :all a list will be returned
                                    #   even if only one node is found.
                    include_me=true,# include self in results
-                   order=[:role, :recipe]   # if only one item is to be returned and
+                   order=[:role, :recipe],   # if only one item is to be returned and
                                    #   there are results from both the role
                                    #   search and the recipe search, pick the
                                    #   first item from the list specified here.%
                                    #   must be :recipe or :role
-                   safe_deref=nil  # if nil, return node, else return
+                   safe_deref=nil  # if nil, return node(s), else return
                                    #   rcb_safe_deref(node,safe_deref)
                   )
     results={
@@ -308,7 +313,7 @@ module RCB
     end #end for
 
     #combine results into prioritised list
-    return_list = order.map {|search_type| results[search_type]}.flatten
+    return_list = order.map {|search_type| results[search_type]}.reduce(:+)
 
     #remove duplicates
     return_list.uniq!
@@ -333,37 +338,6 @@ module RCB
       return_list
     end
   end #end function
-
-
-  # Get a specific node hash from another node by recipe
-  #
-  # In the event of a search with multiple results,
-  # it returns the first match
-  #
-  # In the event of a search with a no matches, if the role
-  # is held on the running node, then the current node hash
-  # values will be returned
-  #
-  def get_settings_by_recipe(recipe, settings)
-    if node["recipes"].include?(recipe)
-      debug("i contain recipe #{recipe}, so choosing my settings")
-      node[settings]
-    else
-      # force colon escaping if not passed from recipe
-      recipe.gsub!(/::/, "\\:\\:")
-      query = "recipes:#{recipe} AND chef_environment:#{node.chef_environment}"
-      debug("searching :node index for '#{query}'")
-      result, _, _ = Chef::Search::Query.new.search(:node, query)
-
-      if result.length == 0
-        Chef::Log.warn("Can't find node with recipe #{recipe}")
-        nil
-      else
-        debug("returning first result found: #{result[0].name}")
-        result[0][settings]
-      end
-    end
-  end
 
   def get_lb_endpoint(role, server, service)
     debug("*** GET_LB_ENDPOINT: SERVER[#{server}], SERVICE[#{service}]")
@@ -404,29 +378,6 @@ module RCB
     Chef::Log.debug("#{method}(): #{msg}")
   end
 
-  def get_nodes_by_recipe(recipe, includeme = true)
-    query = "recipes:#{recipe.gsub(/::/, '\\:\\:')} AND chef_environment:#{node.chef_environment}"
-    debug("searching :node index for '#{query}'")
-    result = Chef::Search::Query.new.search(:node, query)[0]
-
-    if not includeme
-      # remove the calling node from the result array
-      debug("`includeme' is false so ensuring I'm removed from results")
-      result.delete_if { |v| v.name == node.name }
-    else
-      # if result doesn't contain current node, but role is in current runlist,
-      # add it to result
-      if not result.map(&:name).include?(node.name)
-        if node["recipes"].include?(recipe)
-          debug("i wasn't found in search, but '#{recipe}' role is in " +
-                "my run_list! Adding myself to the results.")
-          result << node
-        end
-      end
-    end
-
-    result
-  end
 
 end #end module
 
@@ -500,23 +451,12 @@ class Chef::Recipe::IPManagement
     if Chef::Config[:solo] then
       return [self.get_ip_for_net(network, node)]
     else
-      candidates, _, _ = Chef::Search::Query.new.search(:node,
-        "chef_environment:#{node.chef_environment} AND roles:#{role}")
-
-      if candidates == nil or candidates.length <= 0
-        if node["roles"].include?(role)
-          candidates = [node]
-        end
-      end
-
-      if candidates == nil or candidates.length <= 0
-        error = "Can't find any candidates for role #{role}" +
-          " in environment #{node.chef_environment}"
-
-        rcb_exit_error error
-      end
-
-      return candidates.map { |x| get_ip_for_net(network, x) }
+      osops_search(search_string=role,
+                   one_or_all=:all,
+                   include_me=includeme,
+                   order=[:role],
+                   safe_deref=nil
+                  ).map { |x| get_ip_for_net(network, x) }
     end
   end
 
@@ -525,16 +465,16 @@ class Chef::Recipe::IPManagement
     if Chef::Config[:solo] then
       return self.get_ip_for_net(network, node)
     else
-      candidates, _, _ = Chef::Search::Query.new.search(:node,
-        "chef_environment:#{node.chef_environment} AND roles:#{role}")
 
-      if candidates == nil or candidates.length == 0
-        candidates = [node] if node["roles"].include?(role)
-      end
+      candidates = osops_search(search_string=role,
+                                one_or_all=:all,
+                                include_me=true,
+                                order=[:role],
+                                safe_deref=nil)
 
-      if candidates.length == 1 then
-        return get_ip_for_net(network, candidates[0])
-      elsif candidates.length == 0 then
+      if candidates.one? then
+        return get_ip_for_net(network, candidates.first)
+      elsif candidates.empty? then
         error = "Can't find any candidates for role #{role}" +
           " in environment #{node.chef_environment}"
 
