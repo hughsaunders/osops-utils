@@ -345,7 +345,7 @@ module RCB
     end #end for
 
     return_list = results[prefer] + results[other]
-    result_list.uniq!
+    return_list.uniq!
     if return_list.any?
       # we have at least one result
       if not safe_deref.nil?
