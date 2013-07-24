@@ -262,7 +262,7 @@ module RCB
   #
   # If includeme=false, the current node is removed from the  search result
   # before the results are evaluated and returned
-  def get_role_count(role, includeme = true)
+  def get_role_count(role, includeme=true)
     osops_search(search_string=role,
                  one_or_all=:all,
                  include_me=includeme,
@@ -316,10 +316,10 @@ module RCB
     return_list = order.map {|search_type| results[search_type]}.reduce(:+)
 
     #remove duplicates
-    return_list.uniq!
+    return_list.uniq! {|e| e.name}
 
     #remove self if returned by search but include_me is false
-    return_list.delete! node if not include_me
+    return_list.delete_if {|e| e.name == node.name }  if not include_me
 
     if not safe_deref.nil?
       # result should be dereferenced, do that then remove nils.
