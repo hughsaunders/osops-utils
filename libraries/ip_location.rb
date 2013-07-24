@@ -298,7 +298,7 @@ module RCB
                                    #   if set to :all a list will be returned
                                    #   even if only one node is found.
                    include_me=true,# include self in results
-                   prefer=:role,   # if only one item is to be returned and
+                   order=[:role, :recipe]   # if only one item is to be returned and
                                    #   there are results from both the role
                                    #   search and the recipe search, pick the
                                    #   first item from the list specified here.%
@@ -306,20 +306,6 @@ module RCB
                    safe_deref=nil  # if nil, return node, else return
                                    #   rcb_safe_deref(node,safe_deref)
                   )
-    types = [:recipe, :role]
-    if not types.member? prefer
-      raise "osops-utils get_settings parameter 'prefer' must be in #{types}"
-    end
-    if not [:one, :all].member? one_or_all
-      raise "osops-utils get_settings parameter 'one_or_all' must be :one or :all"
-    end
-
-    # get the non-prefered query type
-    other = (types-[prefer.to_sym]).first
-
-    # Query in this order.
-    order = [prefer, other]
-
     results={
       :recipe => [],
       :role => []
@@ -341,7 +327,7 @@ module RCB
     end #end for
 
     #combine results into prioritised list
-    return_list = results[prefer] + results[other]
+    return_list = order.map {|search_type| results[search_type]}.flatten
 
     #remove duplicates
     return_list.uniq!
@@ -349,29 +335,21 @@ module RCB
     #remove self if returned by search but include_me is false
     return_list.delete! node if not include_me
 
+    if not safe_deref.nil?
+      # result should be dereferenced, do that then remove nils.
+      Chef::Log::info("applying deref #{safe_deref}")
+      return_list.map! {|nodeish| rcb_safe_deref(nodeish, safe_deref)}
+      return_list.delete_if{|item| item.nil?}
+    end
+
     Chef::Log::info("ospos_search return_list: #{return_list}")
-    if return_list.any?
-      # we have at least one result
-      if not safe_deref.nil?
-        # result should be dereferenced, do that then remove nils.
-        Chef::Log::info("applying deref #{safe_deref}")
-        return_list.map! {|nodeish| rcb_safe_deref(nodeish, safe_deref)}
-        return_list.delete_if{|item| item.nil?}
-      end
-      if one_or_all == :one
-        #return first item
-        return_list.first
-      else 
-        #return list (even if it only contains one item)
-        return_list
-      end
+
+    if one_or_all == :one
+      #return first item
+      return_list.first
     else
-      Chef::Log::info("No results found for query #{search_string}")
-      if one_or_all == :one
-        nil
-      else
-        []
-      end
+      #return list (even if it only contains one item)
+      return_list
     end
   end #end function
 
