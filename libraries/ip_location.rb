@@ -189,15 +189,18 @@ module RCB
                           prefer=:role,
                           safe_deref=nil)
 
-    if result.length == 0
+    Chef::Log.warn("osops_search result: #{result}")
+
+    if result.empty?
       Chef::Log.warn("Cannot find #{server}/#{service} for role #{role}")
       nil
-    elsif result.length > 1
+    elsif result.one?
+      debug("gap debug: #{result}")
+      debug("calling get_bind_endpoint() for #{path} (#{result.first.name})")
+      get_bind_endpoint(server, service, result.first)
+    else
       debug("calling get_lb_endpoint() for #{path} (#{result.map(&:name)})")
       get_lb_endpoint(role, server, service)
-    else
-      debug("calling get_bind_endpoint() for #{path} (#{result[0].name})")
-      get_bind_endpoint(server, service, result[0])
     end
   end
 
@@ -346,6 +349,7 @@ module RCB
 
     return_list = results[prefer] + results[other]
     return_list.uniq!
+    Chef::Log::info("ospos_search return_list: #{return_list}")
     if return_list.any?
       # we have at least one result
       if not safe_deref.nil?
@@ -363,6 +367,11 @@ module RCB
       end
     else
       Chef::Log::info("No results found for query #{search_string}")
+      if one_or_all == :one
+        nil
+      else
+        []
+      end
     end
   end #end function
 
