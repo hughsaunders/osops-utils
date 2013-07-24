@@ -209,19 +209,12 @@ module RCB
   # returns all the candidates, not merely the LB vip
   #
   def get_realserver_endpoints(role, server, service)
-    query = "roles:#{role} AND chef_environment:#{node.chef_environment}"
-    debug("searching :node index for '#{query}'")
-    result = Chef::Search::Query.new.search(:node, query)[0]
+    result = osops_search(search_string=role,
+                          one_or_all=:all,
+                          include_me=true,
+                          prefer=:role,
+                          safe_deref=nil)
 
-    # if result doesn't contain current node, but role is in current runlist,
-    # add it to result
-    if not result.map(&:name).include?(node.name)
-      if node["roles"].include?(role)
-        debug("i wasn't found in search, but '#{role}' role is in " +
-              "my run_list! Adding myself to the results.")
-        result << node
-      end
-    end
 
     debug("calling get_bind_endpoint() for #{result.length} node(s): " +
       result.map(&:name).to_s)
