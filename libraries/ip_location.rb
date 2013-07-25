@@ -292,6 +292,9 @@ module RCB
                    safe_deref=nil  # if nil, return node(s), else return
                                    #   rcb_safe_deref(node,safe_deref)
                   )
+
+    debug("Osops_sesarch: search_string:#{search_string}, one_or_all:#{one_or_all},"\
+          +"include_me=#{include_me}, order:#{order}, safe_deref=#{safe_deref}")
     results={
       :recipe => [],
       :role => []
@@ -306,7 +309,7 @@ module RCB
 
       search_string.gsub!(/::/, "\\:\\:")
       query = "#{query_type}s:#{search_string} AND chef_environment:#{node.chef_environment}"
-      Chef::Log::info("Query: #{query}")
+      debug("Osops_sesarch Query: #{query}")
       result, _, _ = Chef::Search::Query.new.search(:node, query)
       results[query_type].push(*result)
       break if one_or_all == :one and results.values.map(&:length).reduce(:+).nonzero?
@@ -323,12 +326,12 @@ module RCB
 
     if not safe_deref.nil?
       # result should be dereferenced, do that then remove nils.
-      Chef::Log::info("applying deref #{safe_deref}")
+      debug("applying deref #{safe_deref}")
       return_list.map! {|nodeish| rcb_safe_deref(nodeish, safe_deref)}
       return_list.delete_if{|item| item.nil?}
     end
 
-    Chef::Log::info("ospos_search return_list: #{return_list}")
+    debug("ospos_search return_list: #{return_list}")
 
     if one_or_all == :one
       #return first item
